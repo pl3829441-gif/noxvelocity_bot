@@ -259,31 +259,25 @@ client.on('interactionCreate', async interaction => {
 
   // POST-WHITELIST
   if (interaction.commandName === 'post-whitelist') {
-    if (!interaction.member.roles.cache.has(ADMIN_ROLE_ID)) return interaction.reply({ content: '❌ Permission refusée', flags: 64 });
+  const embed = new EmbedBuilder()
+    .setTitle('🏁 NOXVELOCITY — Recrutement Pilotes')
+    .setDescription(
+      '**NOXVELOCITY** est un réseau underground de street racing.\n\n' +
+      '🚗 Courses nocturnes\n🏆 Classement officiel\n📜 RP sérieux\n\n' +
+      '👉 Clique sur le bouton ci-dessous pour postuler.'
+    )
+    .setColor(0x0B0B0B)
+    .setFooter({ text: 'NOXVELOCITY • Underground Racing Network' });
 
-    const embed = new EmbedBuilder()
-      .setTitle('🏁 NOXVELOCITY — Recrutement Pilotes')
-      .setColor(EMBED_COLOR)
-      .setDescription(
-        'Réseau underground de street racing.\n\n' +
-        '🏎️ Courses nocturnes\n' +
-        '🏆 Classement officiel\n' +
-        '🎭 RP sérieux\n\n' +
-        'Clique ci-dessous pour postuler.'
-      );
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('whitelist_button')
+      .setLabel('📝 Postuler')
+      .setStyle(ButtonStyle.Primary)
+  );
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('open_whitelist_modal')
-        .setLabel('📄 Postuler')
-        .setStyle(ButtonStyle.Primary)
-    );
-
-    const channel = await client.channels.fetch(ANNOUNCE_CHANNEL_ID);
-    await channel.send({ embeds: [embed], components: [row] });
-
-    return interaction.reply({ content: '✅ Message de recrutement posté !', flags: 64 });
-  }
+  interaction.channel.send({ embeds: [embed], components: [row] });
+  interaction.reply({ content: '✅ Message whitelist posté.', ephemeral: true });
 
   // EMBED MODAL
   if (interaction.commandName === 'embed') {
