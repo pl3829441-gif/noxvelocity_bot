@@ -1,269 +1,114 @@
 require('dotenv').config();
-const fs = require('fs');
-const {
-  Client,
-  GatewayIntentBits,
-  PermissionsBitField,
-  SlashCommandBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  EmbedBuilder,
-  ChannelType
+require('./server.js');
+
+const { 
+  Client, 
+  GatewayIntentBits, 
+  ActionRowBuilder, 
+  ModalBuilder, 
+  TextInputBuilder, 
+  TextInputStyle, 
+  SlashCommandBuilder, 
+  Routes 
 } = require('discord.js');
+const { REST } = require('@discordjs/rest');
 
-/* =========================
-   CONFIGURATION DES RÔLES
-   👉 C’EST ICI QUE TU CHANGES LES NOMS
-========================= */
-const ROLES = {
-  ADMIN: '👑 Admin',
-  MOD: '🛠️ Modérateur',
-  ORGANISATEUR: '🏁 Organisateur',
-  PILOTE: '🏎️ Street Racer'
-};
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
 
-/* =========================
-   CLIENT
-========================= */
+// === Configuration ===
+const ADMIN_ROLE_ID = 'ID_ROLE_ADMIN'; // Remplace par ton rôle admin
+const WHITELIST_CHANNEL_ID = 'ID_CANAL_WHITELIST'; // Canal pour recevoir candidatures
+
+// === Client Discord ===
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-/* =========================
-   DATA PILOTES
-========================= */
-const pilotsPath = './data/pilots.json';
-if (!fs.existsSync('./data')) fs.mkdirSync('./data');
-if (!fs.existsSync(pilotsPath)) fs.writeFileSync(pilotsPath, '{}');
+// === Commandes Slash ===
+const commands = [
+  new SlashCommandBuilder()
+    .setName('post-whitelist')
+    .setDescription('Poste le formulaire pour rejoindre NOXVELOCITY'),
+  new SlashCommandBuilder()
+    .setName('accept')
+    .setDescription('Accepte un joueur à la whitelist')
+    .addStringOption(opt => opt.setName('pseudo').setDescription('Pseudo du joueur').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('deny')
+    .setDescription('Refuse un joueur à la whitelist')
+    .addStringOption(opt => opt.setName('pseudo').setDescription('Pseudo du joueur').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Liste toutes les commandes')
+].map(cmd => cmd.toJSON());
 
-const getPilots = () => JSON.parse(fs.readFileSync(pilotsPath));
-const savePilots = (data) =>
-  fs.writeFileSync(pilotsPath, JSON.stringify(data, null, 2));
+// Enregistrement commandes
+const rest = new REST({ version: '10' }).setToken(TOKEN);
+(async () => {
+  try {
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+    console.log('✅ Commandes slash enregistrées');
+  } catch (err) { console.error(err); }
+})();
 
-/* =========================
-   READY
-========================= */
-client.once('ready', async () => {
+// === Event ready ===
+client.once('ready', () => {
   console.log(`🏁 NOXVELOCITY BOT CONNECTÉ : ${client.user.tag}`);
-
-  const commands = [
-    new SlashCommandBuilder()
-      .setName('setup')
-      .setDescription('Créer le Discord NOXVELOCITY'),
-    new SlashCommandBuilder()
-      .setName('help')
-      .setDescription('Affiche toutes les commandes disponibles pour NOXVELOCITY'),
-
-    new SlashCommandBuilder()
-      .setName('post-whitelist')
-      .setDescription('Poster le message de whitelist'),
-
-    new SlashCommandBuilder()
-      .setName('accept')
-      .setDescription('Accepter un pilote')
-      .addUserOption(o =>
-        o.setName('joueur').setDescription('Pilote').setRequired(true)
-      ),
-
-    new SlashCommandBuilder()
-      .setName('classement')
-      .setDescription('Afficher le classement NOXVELOCITY')
-  ];
-
-  await client.application.commands.set(commands);
 });
 
-/* =========================
-   INTERACTIONS
-========================= */
+// === Event interaction ===
 client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand() && !interaction.isModalSubmit()) return;
 
-  /* ===== SETUP ===== */
-  if (interaction.isChatInputCommand() && interaction.commandName === 'setup') {
-    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-      return interaction.reply({ content: '❌ Admin requis', ephemeral: true });
-    }
-
-    await interaction.reply('🏗️ Création du serveur NOXVELOCITY...');
-
-    // RÔLES
-    const admin = await interaction.guild.roles.create({
-      name: ROLES.ADMIN,
-      permissions: [PermissionsBitField.All]
+  // /help
+  if (interaction.isChatInputCommand() && interaction.commandName === 'help') {
+    await interaction.reply({
+      content: `**Commandes NOXVELOCITY**\n
+/post-whitelist → Post le formulaire de candidature\n
+/accept → Accepter un joueur (Admin)\n
+/deny → Refuser un joueur (Admin)\n
+/help → Affiche cette aide`,
+      ephemeral: true
     });
-
-    const mod = await interaction.guild.roles.create({ name: ROLES.MOD });
-    const orga = await interaction.guild.roles.create({ name: ROLES.ORGANISATEUR });
-    const pilote = await interaction.guild.roles.create({ name: ROLES.PILOTE });
-
-    // CATÉGORIES
-    const info = await interaction.guild.channels.create({
-      name: '📢 Informations',
-      type: ChannelType.GuildCategory
-    });
-
-    const rp = await interaction.guild.channels.create({
-      name: '🏁 Street Racing RP',
-      type: ChannelType.GuildCategory
-    });
-
-    const commu = await interaction.guild.channels.create({
-      name: '💬 Communauté',
-      type: ChannelType.GuildCategory
-    });
-
-    const staff = await interaction.guild.channels.create({
-      name: '🛠️ Staff',
-      type: ChannelType.GuildCategory,
-      permissionOverwrites: [
-        { id: interaction.guild.roles.everyone.id, deny: ['ViewChannel'] },
-        { id: mod.id, allow: ['ViewChannel'] },
-        { id: admin.id, allow: ['ViewChannel'] }
-      ]
-    });
-
-    // SALONS
-    await interaction.guild.channels.create({ name: 'annonces', parent: info.id });
-    await interaction.guild.channels.create({ name: 'règlement', parent: info.id });
-    await interaction.guild.channels.create({ name: 'infos-serveur', parent: info.id });
-    await interaction.guild.channels.create({ name: 'whitelist', parent: info.id });
-
-    await interaction.guild.channels.create({ name: 'présentations', parent: rp.id });
-    await interaction.guild.channels.create({ name: 'recherche-course', parent: rp.id });
-    await interaction.guild.channels.create({ name: 'résultats-courses', parent: rp.id });
-    await interaction.guild.channels.create({ name: 'custom-vehicules', parent: rp.id });
-
-    await interaction.guild.channels.create({ name: 'général', parent: commu.id });
-    await interaction.guild.channels.create({ name: 'screenshots', parent: commu.id });
-
-    await interaction.guild.channels.create({ name: 'staff-chat', parent: staff.id });
-    await interaction.guild.channels.create({ name: 'logs', parent: staff.id });
-
-    interaction.followUp('✅ Discord NOXVELOCITY créé.');
   }
 
-  /* ===== POST WHITELIST ===== */
+  // /post-whitelist
   if (interaction.isChatInputCommand() && interaction.commandName === 'post-whitelist') {
-    const embed = new EmbedBuilder()
-      .setTitle('🏁 NOXVELOCITY — Recrutement Pilotes')
-      .setDescription(
-        'Réseau underground de street racing.\n\n' +
-        '🚗 Courses nocturnes\n🏆 Classement officiel\n📜 RP sérieux\n\n' +
-        'Clique ci-dessous pour postuler.'
-      )
-      .setColor(0xE10600);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('whitelist_btn')
-        .setLabel('📝 Postuler')
-        .setStyle(ButtonStyle.Primary)
-    );
-
-    await interaction.channel.send({ embeds: [embed], components: [row] });
-    interaction.reply({ content: '✅ Message whitelist posté.', ephemeral: true });
-  }
-
-  /* ===== BOUTON ===== */
-  if (interaction.isButton() && interaction.customId === 'whitelist_btn') {
     const modal = new ModalBuilder()
-      .setCustomId('whitelist_modal')
-      .setTitle('NOXVELOCITY — Candidature');
+      .setCustomId('whitelistModal')
+      .setTitle('Formulaire Whitelist NOXVELOCITY');
 
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('prenom')
-          .setLabel('Prénom Nom')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('pseudo')
-          .setLabel('Pseudo RP')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('motivation')
-          .setLabel('Pourquoi rejoindre NOXVELOCITY ?')
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(true)
-      )
-    );
+    const nameInput = new TextInputBuilder()
+      .setCustomId('fullName')
+      .setLabel("Prénom et Nom")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
 
+    const pseudoInput = new TextInputBuilder()
+      .setCustomId('pseudo')
+      .setLabel("Pseudo")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const reasonInput = new TextInputBuilder()
+      .setCustomId('reason')
+      .setLabel("Pourquoi rejoindre le projet ?")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true);
+
+    const row1 = new ActionRowBuilder().addComponents(nameInput);
+    const row2 = new ActionRowBuilder().addComponents(pseudoInput);
+    const row3 = new ActionRowBuilder().addComponents(reasonInput);
+
+    modal.addComponents(row1, row2, row3);
     await interaction.showModal(modal);
   }
 
-  /* ===== MODALE ===== */
-  if (interaction.isModalSubmit() && interaction.customId === 'whitelist_modal') {
-    const prenom = interaction.fields.getTextInputValue('prenom');
+  // Modal submission
+  if (interaction.isModalSubmit() && interaction.customId === 'whitelistModal') {
+    const fullName = interaction.fields.getTextInputValue('fullName');
     const pseudo = interaction.fields.getTextInputValue('pseudo');
-    const motivation = interaction.fields.getTextInputValue('motivation');
+    const reason = interaction.fields.getTextInputValue('reason');
 
-    const salon = interaction.guild.channels.cache.find(c => c.name === 'whitelist');
-
-    const embed = new EmbedBuilder()
-      .setTitle('📋 Nouvelle candidature')
-      .setColor(0x111111)
-      .addFields(
-        { name: 'Discord', value: `<@${interaction.user.id}>` },
-        { name: 'Prénom Nom', value: prenom },
-        { name: 'Pseudo', value: pseudo },
-        { name: 'Motivation', value: motivation }
-      );
-
-    salon.send({ embeds: [embed] });
-    interaction.reply({ content: '✅ Candidature envoyée.', ephemeral: true });
-  }
-
-  /* ===== ACCEPT ===== */
-  if (interaction.isChatInputCommand() && interaction.commandName === 'accept') {
-    if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return;
-
-    const user = interaction.options.getUser('joueur');
-    const role = interaction.guild.roles.cache.find(r => r.name === ROLES.PILOTE);
-    const member = await interaction.guild.members.fetch(user.id);
-
-    await member.roles.add(role);
-
-    const pilots = getPilots();
-    pilots[user.id] = { points: 0, races: 0, wins: 0 };
-    savePilots(pilots);
-
-    interaction.reply(`🏁 ${user} est maintenant pilote NOXVELOCITY.`);
-  }
-
-  /* ===== CLASSEMENT ===== */
-  if (interaction.isChatInputCommand() && interaction.commandName === 'classement') {
-    const pilots = getPilots();
-    const sorted = Object.entries(pilots).sort((a, b) => b[1].points - a[1].points);
-
-    const desc = sorted.length
-      ? sorted.map(
-          ([id, d], i) => `**#${i + 1}** <@${id}> — ${d.points} pts`
-        ).join('\n')
-      : 'Aucun pilote classé.';
-
-    interaction.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('🏆 Classement NOXVELOCITY')
-          .setDescription(desc)
-          .setColor(0xE10600)
-      ]
-    });
-  }
-});
-
-/* ========================= */
-client.login(process.env.TOKEN);
+    const channel = client.channels.cache.ge
