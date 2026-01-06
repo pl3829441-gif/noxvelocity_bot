@@ -1,12 +1,16 @@
-const express = require('express');
-const app = express();
-
-// route simple pour Render
-app.get('/', (req, res) => {
-  res.send('NOXVELOCITY BOT ONLINE');
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+{
+  "name": "noxvelocity-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.0.0",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

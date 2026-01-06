@@ -1,24 +1,20 @@
 require('dotenv').config();
-require('./server.js');
-
-const { 
-  Client, 
-  GatewayIntentBits, 
-  ActionRowBuilder, 
-  ModalBuilder, 
-  TextInputBuilder, 
-  TextInputStyle, 
-  SlashCommandBuilder, 
-  Routes 
-} = require('discord.js');
+const express = require('express');
+const { Client, GatewayIntentBits, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, SlashCommandBuilder, Routes } = require('discord.js');
 const { REST } = require('@discordjs/rest');
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 
-// === Configuration ===
+// === CONFIG ===
 const ADMIN_ROLE_ID = 'ID_ROLE_ADMIN'; // Remplace par ton rôle admin
-const WHITELIST_CHANNEL_ID = 'ID_CANAL_WHITELIST'; // Canal pour recevoir candidatures
+const WHITELIST_CHANNEL_ID = 'ID_CANAL_WHITELIST'; // Remplace par ton canal pour recevoir les candidatures
+
+// === Serveur Express pour Render ===
+const app = express();
+app.get('/', (req, res) => res.send('NOXVELOCITY BOT ONLINE'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 // === Client Discord ===
 const client = new Client({
@@ -43,7 +39,7 @@ const commands = [
     .setDescription('Liste toutes les commandes')
 ].map(cmd => cmd.toJSON());
 
-// Enregistrement commandes
+// Enregistrement des commandes
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 (async () => {
   try {
@@ -52,18 +48,16 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
   } catch (err) { console.error(err); }
 })();
 
-// === Event ready ===
-client.once('ready', () => {
-  console.log(`🏁 NOXVELOCITY BOT CONNECTÉ : ${client.user.tag}`);
-});
+// === Ready Event ===
+client.once('ready', () => console.log(`🏁 NOXVELOCITY BOT CONNECTÉ : ${client.user.tag}`));
 
-// === Event interaction ===
+// === Interaction Event ===
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand() && !interaction.isModalSubmit()) return;
 
   // /help
   if (interaction.isChatInputCommand() && interaction.commandName === 'help') {
-    await interaction.reply({
+    return interaction.reply({
       content: `**Commandes NOXVELOCITY**\n
 /post-whitelist → Post le formulaire de candidature\n
 /accept → Accepter un joueur (Admin)\n
@@ -79,30 +73,17 @@ client.on('interactionCreate', async interaction => {
       .setCustomId('whitelistModal')
       .setTitle('Formulaire Whitelist NOXVELOCITY');
 
-    const nameInput = new TextInputBuilder()
-      .setCustomId('fullName')
-      .setLabel("Prénom et Nom")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+    const nameInput = new TextInputBuilder().setCustomId('fullName').setLabel("Prénom et Nom").setStyle(TextInputStyle.Short).setRequired(true);
+    const pseudoInput = new TextInputBuilder().setCustomId('pseudo').setLabel("Pseudo").setStyle(TextInputStyle.Short).setRequired(true);
+    const reasonInput = new TextInputBuilder().setCustomId('reason').setLabel("Pourquoi rejoindre le projet ?").setStyle(TextInputStyle.Paragraph).setRequired(true);
 
-    const pseudoInput = new TextInputBuilder()
-      .setCustomId('pseudo')
-      .setLabel("Pseudo")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(nameInput),
+      new ActionRowBuilder().addComponents(pseudoInput),
+      new ActionRowBuilder().addComponents(reasonInput)
+    );
 
-    const reasonInput = new TextInputBuilder()
-      .setCustomId('reason')
-      .setLabel("Pourquoi rejoindre le projet ?")
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true);
-
-    const row1 = new ActionRowBuilder().addComponents(nameInput);
-    const row2 = new ActionRowBuilder().addComponents(pseudoInput);
-    const row3 = new ActionRowBuilder().addComponents(reasonInput);
-
-    modal.addComponents(row1, row2, row3);
-    await interaction.showModal(modal);
+    return interaction.showModal(modal);
   }
 
   // Modal submission
@@ -111,4 +92,30 @@ client.on('interactionCreate', async interaction => {
     const pseudo = interaction.fields.getTextInputValue('pseudo');
     const reason = interaction.fields.getTextInputValue('reason');
 
-    const channel = client.channels.cache.ge
+    const channel = client.channels.cache.get(WHITELIST_CHANNEL_ID);
+    if (channel) channel.send(`**Nouvelle candidature**\nNom : ${fullName}\nPseudo : ${pseudo}\nMotif : ${reason}`);
+
+    return interaction.reply({ content: 'Votre candidature a été envoyée !', ephemeral: true });
+  }
+
+  // /accept
+  if (interaction.isChatInputCommand() && interaction.commandName === 'accept') {
+    if (!interaction.member.roles.cache.has(ADMIN_ROLE_ID))
+      return interaction.reply({ content: "❌ Vous n'avez pas la permission", ephemeral: true });
+
+    const pseudo = interaction.options.getString('pseudo');
+    return interaction.reply({ content: `✅ Le joueur **${pseudo}** a été accepté dans la whitelist !`, ephemeral: true });
+  }
+
+  // /deny
+  if (interaction.isChatInputCommand() && interaction.commandName === 'deny') {
+    if (!interaction.member.roles.cache.has(ADMIN_ROLE_ID))
+      return interaction.reply({ content: "❌ Vous n'avez pas la permission", ephemeral: true });
+
+    const pseudo = interaction.options.getString('pseudo');
+    return interaction.reply({ content: `❌ Le joueur **${pseudo}** a été refusé.`, ephemeral: true });
+  }
+});
+
+// === Login ===
+client.login(TOKEN);
