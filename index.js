@@ -257,8 +257,8 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ embeds: [embed], flags: 64 });
   }
 
-  // POST-WHITELIST
-  if (interaction.commandName === 'post-whitelist') {
+ // POST-WHITELIST
+if (interaction.commandName === 'post-whitelist') {
   const embed = new EmbedBuilder()
     .setTitle('🏁 NOXVELOCITY — Recrutement Pilotes')
     .setDescription(
@@ -276,8 +276,10 @@ client.on('interactionCreate', async interaction => {
       .setStyle(ButtonStyle.Primary)
   );
 
-  interaction.channel.send({ embeds: [embed], components: [row] });
-  interaction.reply({ content: '✅ Message whitelist posté.', ephemeral: true });
+  await interaction.channel.send({ embeds: [embed], components: [row] });
+  await interaction.reply({ content: '✅ Message whitelist posté.', ephemeral: true });
+}
+
 
   // EMBED MODAL
   if (interaction.commandName === 'embed') {
@@ -360,6 +362,7 @@ client.on('interactionCreate', async interaction => {
     await interaction.message.edit({ embeds: [embed] });
     return interaction.reply({ content: '✅ Mise à jour effectuée', flags: 64 });
   }
+});
 
 /* ===== LOGIN ===== */
 client.login(TOKEN);
@@ -369,4 +372,3 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (_, res) => res.send('NOXVELOCITY BOT ONLINE'));
 app.listen(PORT, () => console.log(`🌐 Web server running on port ${PORT}`));
-
