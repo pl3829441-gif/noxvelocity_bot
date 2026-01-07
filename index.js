@@ -24,6 +24,7 @@ const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
 const ANNOUNCE_CHANNEL_ID = process.env.ANNOUNCE_CHANNEL_ID;
 const EMBED_COLOR = 0xff6a00;
 const DATA_FILE = './pilots.json';
+const WHITELIST_CHANNEL_ID = process.env.WHITELIST_CHANNEL_ID;
 
 /* ===== DATA ===== */
 function loadData() {
@@ -276,9 +277,13 @@ if (interaction.commandName === 'post-whitelist') {
       .setStyle(ButtonStyle.Primary)
   );
 
-  await interaction.channel.send({ embeds: [embed], components: [row] });
-  await interaction.reply({ content: '✅ Message whitelist posté.', ephemeral: true });
-}
+const channel = await client.channels.fetch(WHITELIST_CHANNEL_ID);
+await channel.send({ embeds: [embed], components: [row] });
+
+return interaction.reply({
+  content: '✅ Message whitelist posté dans #whitelist',
+  flags: 64
+});
 
 
   // EMBED MODAL
@@ -372,3 +377,4 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (_, res) => res.send('NOXVELOCITY BOT ONLINE'));
 app.listen(PORT, () => console.log(`🌐 Web server running on port ${PORT}`));
+
